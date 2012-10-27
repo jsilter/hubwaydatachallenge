@@ -27,6 +27,7 @@ var stationTableId = "1TYoxLzEiq38FCr5N6iP-x_IF5JcP4qvuiH0vUvo";
 //Contains a 5% sample. Loads faster, useful for testing
 var testTripTableId = "1PEvVQaoTQ29WdGQr-XdlbZS2ocX6Z1xqFXlsjeo";
 var fullTripTableId = "1XbTMbt4SDu8HBfJ7mJKTv5m9NLWyupfyfVudu0g";
+//census data
 var populationTableId = "1slogrMbvfK9uhACNjDBjwf9aiTzM4vfgRo6GRNY"
 var tripTableId = fullTripTableId;
 //-----------------------//
@@ -359,6 +360,7 @@ function initializeStationScaleSlider(){
 
     var max = stationSizeScale*2;
     var slider = $(".controlSlider#stationSizeScale").slider({
+		orientation: "vertical",
         step: max/100,
         value: stationSizeScale,
         min: 1,
@@ -375,6 +377,7 @@ function initializeStationColorSlider(){
 
     var max = stationColorScale*2;
     var slider = $(".controlSlider#stationColorScale").slider({
+		orientation: "vertical",
         step: max/100,
         value: stationColorScale,
         min: 1,
@@ -475,6 +478,7 @@ function scaleByDOW(scalar){
 //We fix the saturation, move intensity from high (white)
 //to low (colored) as colorValue increases
 function getColorStr(colorValue){
+	var path = false;
 
     var colorValue = Math.floor(colorValue);
     var absColor = Math.abs(colorValue);

@@ -63,7 +63,7 @@ class FixedOffset(datetime.tzinfo):
 
     def dst(self, dt):
         return ZERO
-        
+
 def get_dict(line, string_fields, float_fields):
     vals = line.split(",")
     stat = { key: vals[string_fields[key]].replace('"','').strip() for key in string_fields}
@@ -71,20 +71,24 @@ def get_dict(line, string_fields, float_fields):
         stat[key] = float(vals[colnum].strip())
     return stat
 
+
 input_datetime_format = "%Y-%m-%d %H:%M:%S"
+def parse_date_str(date_str, input_datetime_format=input_datetime_format):
+    tz_str = date_str[-3:]
+    tz_mins = int(tz_str) * 60
+    tzinfo = FixedOffset(tz_mins, "Pacific?")
+    tmp = datetime.datetime.strptime(date_str[0:-3], input_datetime_format)
+    return tmp.replace(tzinfo=tzinfo)
+
 date_fields = ['start_date', 'end_date']
 def get_trip(line):
     """Create dictionary of trip data from `line`"""
     trip_dict = get_dict(line, trip_string_fields, trip_float_fields)
-    
+
     for key in date_fields:
         #We need to manually parse time zone
         date_str = trip_dict[key]
-        tz_str = date_str[-3:]
-        tz_mins = int(tz_str) * 60
-        tzinfo = FixedOffset(tz_mins, "Pacific?")
-        tmp = datetime.datetime.strptime(date_str[0:-3], input_datetime_format)
-        trip_dict[key] = tmp.replace(tzinfo=tzinfo)
+        trip_dict[key] = parse_date_str(date_str)
 
     return trip_dict
 
@@ -94,17 +98,17 @@ def create_time_dict(indatetime, prepend, hours_offset=3):
     outdt = indatetime.tzinfo.utcoffset(None) + datetime.timedelta(hours=hours_offset)
     outtz = FixedOffset( outdt.total_seconds() / (60), "Eastern")
     indt = indatetime.astimezone(outtz)
-    out_dict[prepend + '_' + 'day'] = indt.strftime("%Y.%m.%d")
-    out_dict[prepend + '_' + 'dow'] = indt.weekday()
-    out_dict[prepend + '_' + 'time'] = indt.strftime("%H:%M")
+    out_dict[prepend + 'day'] = indt.strftime("%Y.%m.%d")
+    out_dict[prepend + 'dow'] = indt.weekday()
+    out_dict[prepend + 'time'] = indt.strftime("%H:%M")
     return out_dict
 
 if __name__ == "__main__":
-    
-    
+
+
     args = parser.parse_args()
     fraction = float(args.fraction)
-    
+
     trips_file = open(trips_path, "r")
     trips_file.readline()
 
@@ -115,11 +119,11 @@ if __name__ == "__main__":
     delim = ","
 
     print delim.join(out_columns)
-    
+
     for line in trips_file:
         if random.random() >= fraction:
             continue
-        
+
         trip = get_trip(line)
         min_id = -1;
         try:
@@ -130,8 +134,8 @@ if __name__ == "__main__":
             continue;
 
         start_date, end_date = trip['start_date'], trip['end_date']
-        start_dict = create_time_dict(start_date, 'start')
-        end_dict = create_time_dict(end_date, 'end')
+        start_dict = create_time_dict(start_date, 'start_')
+        end_dict = create_time_dict(end_date, 'end_')
 
         trip.update(start_dict)
         trip.update(end_dict)
@@ -140,10 +144,10 @@ if __name__ == "__main__":
         out_str = delim.join(["%s" % trip[x] for x in out_columns])
         print out_str
 
-        
-        
-        
-        
+
+
+
+
 
 
 

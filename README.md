@@ -1,6 +1,6 @@
 ## Description
 
-This is the source code behind my entry for the [Hubway data challenge](http://hubwaydatachallenge.org) for details. You can see a running entry at http://www.jacobsilterra.com/hubway-data-challenge/,
+This is the source code behind our entry for the [Hubway data challenge](http://hubwaydatachallenge.org) for details. You can see a running entry at http://www.jacobsilterra.com/hubway-data-challenge/,
 and a description 
 
 ## Installation
@@ -9,7 +9,7 @@ keys.js must be altered to include your browser API key from google. Needless to
 
 Only the files in the main directory need to be available, they should all 
 be in the same directory on a server. I've included the scripts used for pre-processing data, 
-those are only useful if you plan on parsing the Hubway data yourself. That means everything under the "scripts" directory.
+those are only useful if you plan on parsing the Hubway data yourself. That means everything under the "preprocessing_scripts" directory.
 
 ## Data Sources
 
@@ -23,7 +23,7 @@ Data is plotted using the Google Maps API, and retrieved using the Google Fusion
 
 ## License
 
-Copyright (c) 2012, Jacob Silterra
+Copyright (c) 2012, Jacob Silterra and Monica Gallegos
 All rights reserved.
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by

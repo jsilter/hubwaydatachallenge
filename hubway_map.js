@@ -17,6 +17,7 @@ All rights reserved.
 
 //Should be imported already from a separate file
 var GOOGLE_BROWSER_KEY = GOOGLE_BROWSER_KEY;
+google.load('visualization', '1', {packages: ['corechart']});
 
 var fusion_query_url="https://www.googleapis.com/fusiontables/v1/query";
 var google_shorten_url="https://www.googleapis.com/urlshortener/v1/url";
@@ -30,6 +31,10 @@ var fullTripTableId = "1XbTMbt4SDu8HBfJ7mJKTv5m9NLWyupfyfVudu0g";
 //census data
 var populationTableId = "1slogrMbvfK9uhACNjDBjwf9aiTzM4vfgRo6GRNY"
 var tripTableId = fullTripTableId;
+
+
+var weekends = ["#liSat", "#liSun"];
+var weekdays = ["#liMon", "#liTue", "#liWed", "#liThu", "#liFri"];
 //-----------------------//
 
 var timeColName = "start_time"
@@ -39,16 +44,23 @@ var MINUTES_IN_DAY = 24*60;
 var MIN_RETRY_INTERVAL = 0.2;
 var retryInterval = MIN_RETRY_INTERVAL;
 
-var stationSizeScale = 10;
+var stationSizeScale = 20;
 var stationColorScale = 500;
 var timeIncrMin = 15;
+var timeHalfWidth = timeIncrMin;
 var startLat = 42.357053;
 var startLng = -71.092622;
-var startZoom = 13;
+var startZoom = 14;
+
+var defStationOpacity = 0.6;
 //When a station is clicked, we show outgoing arrows
 //To keep the graph clean, we only show the top
 //maxNumberArrows destinations
 var maxNumberArrows = 5;
+
+//Only allow at most maxNumSelected stations to be selected at once
+var maxNumSelected = 1;
+var selectedIds = [];
 
 //Gets rewritten in initialize. Used for shortening URL
 var base_url = "http://www.example.com/hubway_map.html"
@@ -57,6 +69,7 @@ var isPlaying = false;
 var counterId = -1;
 
 var map;
+var chart;
 var bikeLayer;
 var popLayer;
 
@@ -109,12 +122,15 @@ function ResponseCache(maxNum){
 	}
 }
 
+/*
+Convert minutes to string of form HH:MM
+Negative is set to 0, higher than a day is 24:00
+This is for querying times based on them being strings
+*/
 function getHourMinStr(minutes){
-	if(minutes < 0){
-		minutes += MINUTES_IN_DAY;
-	}else{
-		minutes = minutes % MINUTES_IN_DAY;
-	}
+	minutes = Math.max(0, minutes);
+	minutes = Math.min(MINUTES_IN_DAY, minutes);
+
     var hours = (minutes / 60 ) >> 0;
     var rem = minutes - hours*60;
     if(hours < 10){
@@ -127,10 +143,20 @@ function getHourMinStr(minutes){
     return hours + ":" + rem;
 }
 
+function getMinutes(hourMinStr){
+	var tokens = hourMinStr.split(':');
+	var hours = parseInt(tokens[0], 10);
+	var minutes = parseInt(tokens[1], 10);
+	return hours*60 + minutes;
+}
 
 $(document).ready(initialize);
-function initialize(){
-    //jQuery.noConflict();
+function initialize()
+{
+  initializeMenu();
+
+  //jQuery.noConflict();
+	//google.load('visualization', '1', {packages: ['corechart']});
     $("#nojavascript").hide();
 	base_url = $.url().attr('source').split('?')[0];
 
@@ -175,9 +201,23 @@ function parseURLparams(params){
     if("dow" in params){
         //Comma separated list of day numbers
         dayNums = params.dow.split(",");
-        $('#DOW>:checkbox').each(function() {
-            this.checked = this.value in dayNums;
+
+        $('#week li').each(function() {
+            var isActive = this.value in dayNums;
+
+            $(this).removeClass("activated_day unactived_day");
+            if(isActive)
+            {
+                $(this).addClass("activated_day")
+            }
+            else
+            {
+                $(this).addClass("unactived_day");
+            }
         });
+        /*$('#DOW>:checkbox').each(function() {
+            this.checked = this.value in dayNums;
+        });*/
 
     }
 	if("showPopulation" in params){
@@ -194,7 +234,7 @@ function parseURLparams(params){
 		startLng = params.lng;
 	}
 	if("zoom" in params){
-		startZoom = parseInt(params.zoom);
+		startZoom = parseInt(params.zoom, 10);
 	}
 }
 
@@ -205,14 +245,19 @@ function initializeControls(){
     initializeStationScaleSlider();
     initializeStationColorSlider();
 
-    $('#DOW>:checkbox').change(function(){
+    $("#week li").click(function(){
         if(changesEnabled){
             displayTrips(getSliderTime());
+            if(selectedIds){
+            	for(ind in selectedIds){
+            		redrawDayGraph(stationMarkers[selectedIds[ind]]);
+            	}
+            }
         }
     });
 
-    $('#DOW>#weekdays').click(getMultiCheckBoxSelector('#DOW>.weekday'));
-    $('#DOW>#weekends').click(getMultiCheckBoxSelector('#DOW>.weekend'));
+    $('#weekday-button').click(getMultiCheckBoxSelector(weekdays));
+    $('#weekend-button').click(getMultiCheckBoxSelector(weekends));
 
 	$('#show-population').change(function(){
 		if(this.checked){
@@ -258,7 +303,7 @@ function initializeControls(){
 				downloadTrips(loadTime);
 			}
 			setLoading(false);
-			counterId = setInterval(incrTimeForPlay, 1500);
+			counterId = setInterval(incrTimeForPlay, 500);
 		}else{
 			clearInterval(counterId);
 		}
@@ -283,16 +328,48 @@ function incrTimeForPlay(){
 	}
 }
 
+
 /*
  *    Return a function which checks all boxes if any are unchecked,
  *    provided they match the given checkBoxSelector. If all are checked,
  *    they are all unchecked.
  */
+function getMultiCheckBoxSelector(daySelectors){
+    return function(){
+        var allSelected = true;
+        for(var i=0; i<daySelectors.length; i++)
+        {
+            allSelected &= $(daySelectors[i]).hasClass("activated_day");
+        }
+
+        changesEnabled = false;
+        //Deselect all iff all selected
+        for(var i=0; i<daySelectors.length; i++)
+        {
+            $(daySelectors[i]).removeClass("activated_day unactivated_day");
+            if(allSelected){
+                $(daySelectors[i]).addClass("unactivated_day")
+            }else{
+                $(daySelectors[i]).addClass("activated_day");
+            }
+        }
+
+        changesEnabled = true;
+        displayTrips(getSliderTime());
+    };
+
+}
+
+/*
+ *    Return a function which checks all boxes if any are unchecked,
+ *    provided they match the given checkBoxSelector. If all are checked,
+ *    they are all unchecked.
+ *
 function getMultiCheckBoxSelector(checkBoxSelector){
     return function(){
         var allSelected = true;
         $(checkBoxSelector).each(function(){
-            allSelected &= this.checked;
+            allSelected &= this.hasClass("activated_day");
         });
 
         changesEnabled = false;
@@ -304,6 +381,9 @@ function getMultiCheckBoxSelector(checkBoxSelector){
     };
 
 }
+*/
+
+
 
 function setStationSizeScale(uivalue, setUI){
     if(setUI){
@@ -365,12 +445,12 @@ function initializeStationScaleSlider(){
         value: stationSizeScale,
         min: 1,
         max: max,
-        change: function(event, ui){
+        slide: function(event, ui){
             setStationSizeScale(ui.value, false);
         }
     });
     var value = slider.slider('value');
-    setStationSizeScale(value);
+    //setStationSizeScale(value);
 }
 
 function initializeStationColorSlider(){
@@ -382,26 +462,111 @@ function initializeStationColorSlider(){
         value: stationColorScale,
         min: 1,
         max: max,
-        change: function(event, ui){
+        slide: function(event, ui){
             setStationColorScale(ui.value, false);
         }
     });
     var value = slider.slider('value');
-    setStationColorScale(value, false);
+    //setStationColorScale(value, false);
 }
 
 function initializeMap(){
-    var mapOptions = {
-        center: new google.maps.LatLng(startLat, startLng),
-        zoom: startZoom,
-        mapTypeId: google.maps.MapTypeId.ROADMAP
-    };
+        // Create an array of styles.
+  var styles = [
+      {
+        "featureType": "administrative.country",
+        "elementType": "geometry.fill",
+        "stylers": [
+          { "visibility": "on" },
+          { "color": "#f9f9fb" }
+        ]
+      },{
+        "featureType": "landscape.natural",
+        "elementType": "geometry.fill",
+        "stylers": [
+          { "color": "#f9f9fb" }
+        ]
+      },{
+        "featureType": "administrative.country",
+        "elementType": "labels",
+        "stylers": [
+          { "visibility": "off" }
+        ]
+      },{
+        "featureType": "administrative.province",
+        "elementType": "labels",
+        "stylers": [
+          { "visibility": "off" }
+        ]
+      },{
+        "featureType": "road.highway",
+        "stylers": [
+          { "visibility": "off" }
+        ]
+      },{
+        "featureType": "poi",
+        "elementType": "geometry.fill",
+        "stylers": [
+          { "visibility": "on" },
+          { "color": "#c1ccce" }
+        ]
+      },{
+        "featureType": "road",
+        "elementType": "geometry.fill",
+        "stylers": [
+          { "color": "#e6ecf3" }
+        ]
+      },{
+        "featureType": "road",
+        "elementType": "labels.text.stroke",
+        "stylers": [
+          { "visibility": "on" },
+          { "color": "#eaeaea" }
+        ]
+      },{
+        "featureType": "water",
+        "stylers": [
+          { "visibility": "on" },
+          { "saturation": -17 },
+          { "color": "#a1bfc5" },
+          { "lightness": 9 }
+        ]
+      },{
+        "featureType": "landscape",
+        "stylers": [
+          { "color": "#f9f9fb" }
+        ]
+      }
+  ];
 
-    map = new google.maps.Map(document.getElementById("map_canvas"),
-                                                      mapOptions);
+  // Create a new StyledMapType object, passing it the array of styles,
+  // as well as the name to be displayed on the map type control.
+  var styledMap = new google.maps.StyledMapType(styles,
+    {name: "Minimalist"});
 
-    bikeLayer = new google.maps.BicyclingLayer();
-    $('#show-bike').change();
+  // Create a map object, and include the MapTypeId to add
+  // to the map type control.
+  var mapOptions =
+  {
+    center: new google.maps.LatLng(startLat, startLng),
+    zoom: startZoom,
+    panControl: false,
+    zoomControl: false,
+    scaleControl: false,
+    streetViewControl: false,
+    mapTypeControlOptions: {
+      mapTypeIds: [google.maps.MapTypeId.ROADMAP, 'map_style']
+    }
+  };
+  map = new google.maps.Map(document.getElementById('map_canvas'),
+    mapOptions);
+
+  //Associate the styled map with the MapTypeId and set it to display.
+  map.mapTypes.set('map_style', styledMap);
+  map.setMapTypeId('map_style');
+
+  bikeLayer = new google.maps.BicyclingLayer();
+  $('#show-bike').change();
 
 	//Add fusion layer with population
 	popLayer = new google.maps.FusionTablesLayer({
@@ -412,7 +577,8 @@ function initializeMap(){
 			},
 			heatmap: {enabled: false}
 		});
-    queryStations();
+
+  queryStations();
 
 	$('#show-population').change();
 }
@@ -439,18 +605,27 @@ function queryStations(){
 function getDOWString(){
     //Dummy value just so it's never empty
     var allVals = ["-1"];
-    $('#DOW>:checkbox').each(function() {
+
+    $("#week li").each(function(n) {
+           if($(this).hasClass("activated_day"))
+           {
+                allVals.push(this.value);
+           }
+      });
+
+    /*$('#DOW>:checkbox').each(function() {
         if(this.checked){
             allVals.push(this.value);
         }
-    });
+    });*/
+
     return allVals.join(",");
 }
 
 function getDOWCount(){
     var count = 0;
-    $('#DOW>:checkbox').each(function() {
-        if(this.checked){
+    $("#week li").each(function() {
+        if($(this).hasClass("activated_day")){
             count += 1
         }
     });
@@ -483,11 +658,11 @@ function getColorStr(colorValue){
     var colorValue = Math.floor(colorValue);
     var absColor = Math.abs(colorValue);
     var minIntens = 40;
-    var maxIntens = 100;
+    var maxIntens = 65;
     var intens =  Math.max(Math.min(maxIntens - Math.abs(absColor), maxIntens), minIntens);
-    var saturation = 90;
-    var redHue = 0;
-    var blueHue = 220;
+    var saturation = 100;
+    var redHue = 80;
+    var blueHue = 20;
     var pathHue = 34;
 
     var colorStr = "hsl("
@@ -511,14 +686,12 @@ function getSliderTime(){
 function getDateTimeClause(midTimeVal){
     var dowString = getDOWString();
 
-    var halfWidth = timeIncrMin;
-    var minTimeStr = getHourMinStr(midTimeVal - halfWidth);
-    var maxTimeStr = getHourMinStr(midTimeVal + halfWidth);
+    var minTimeStr = getHourMinStr(midTimeVal - timeHalfWidth);
+    var maxTimeStr = getHourMinStr(midTimeVal + timeHalfWidth);
 
     //Note the single quotes around the time
     var outStr = timeColName + " >= '" + minTimeStr + "' AND " + timeColName + " < '" + maxTimeStr + "'";
     outStr += " AND " + "start_dow IN (" + dowString + ")";
-	//console.log(outStr);
 
     return outStr;
 }
@@ -573,13 +746,13 @@ function downloadOrDisplayTrips(midTimeVal, cacheKey, handler){
 }
 function tripErrorHandler(jqXHR, textStatus, errorThrown){
 	retryInterval *= 1.5;
-	
+
 	if(jqXHR.status >= 500){
 		console.log("tripErrorHandler retrying");
-		errorThrown = "Error loading trip data; retrying in " + retryInterval.toFixed(2) + " seconds"; 
+		errorThrown = "Error loading trip data; retrying in " + retryInterval.toFixed(2) + " seconds";
 		setTimeout(function(){displayTrips(getSliderTime());}, retryInterval*1000);
 	}
-	
+
 	errorHandler(jqXHR, textStatus, errorThrown);
 }
 
@@ -636,13 +809,12 @@ function tripDataHandler(response) {
     var rows = response.rows;
     for (var i = 0; i < rows.length; i++) {
         var item = rows[i];
-		//console.log(item);
 
-        var startId = parseInt(item[startIdCol]);
-        var endId = parseInt(item[endIdCol]);
+        var startId = parseInt(item[startIdCol], 10);
+        var endId = parseInt(item[endIdCol], 10);
 		//var minId = parseInt(item[minIdCol]);
 
-        var numOutgoing = parseInt(item[outgoingCol]);
+        var numOutgoing = parseInt(item[outgoingCol], 10);
 
         startMarker = stationMarkers[startId];
         endMarker = stationMarkers[endId];
@@ -652,6 +824,9 @@ function tripDataHandler(response) {
     }
 
 	redrawStations();
+    //
+    //mapFunctionStationsAsync(revalidateStation);
+
     setLoading(false);
 	return response;
 }
@@ -668,34 +843,44 @@ function incrMarkerValues(transitObj, otherId, value){
 }
 
 function recalcStationProps(stationMarker){
-		//var stationMarker = stationMarkers[station_id];
-		var activity = stationMarker.outgoing.total + stationMarker.incoming.total;
-		var flux = stationMarker.outgoing.total - stationMarker.incoming.total;
 
-		activity /= stationMarker.days_active;
-		flux /= stationMarker.days_active;
+        //var stationMarker = stationMarkers[station_id];
+        var activity = stationMarker.outgoing.total + stationMarker.incoming.total;
+        var flux = stationMarker.outgoing.total - stationMarker.incoming.total;
 
-		activity = scaleByDOW(activity);
-		flux = scaleByDOW(flux);
+        activity /= stationMarker.days_active;
+        flux /= stationMarker.days_active;
 
-		stationMarker.title = stationMarker.name;
-		stationMarker.title += "\nAvg. Daily Activity: " + activity.toFixed(2);
-		stationMarker.title += "\nAvg. Daily Flux: " + flux.toFixed(2);
+        activity = scaleByDOW(activity);
+        flux = scaleByDOW(flux);
+
+        stationMarker.title = stationMarker.name;
+        stationMarker.title += "\nAvg. Daily Activity: " + activity.toFixed(2);
+        stationMarker.title += "\nAvg. Daily Flux: " + flux.toFixed(2);
 
 		var cur_scale = Math.sqrt(activity) * stationSizeScale;
 		cur_scale = Math.max(2, cur_scale);
 
-		var colorStr = getColorStr(flux * stationColorScale);
+        var colorStr = getColorStr(flux * stationColorScale);
+        //We add the color to the station, because we mess with the marker
+        //color when the marker is selected
 
-		//Have to add it to the map again to get it to redraw
-		stationMarker.getIcon().scale = cur_scale;
-		stationMarker.getIcon().fillColor = colorStr;
+        var tempIcon = stationMarker.getIcon();
+
+        tempIcon.fillOpacity = defStationOpacity;
+        tempIcon.scale = cur_scale;
+
+        stationMarker.tripColorStr = colorStr;
+        tempIcon.fillColor = colorStr;
+
+        stationMarker.setIcon(tempIcon);
 }
+
 
 function redrawStations(){
 	mapFunctionStations(recalcStationProps);
     mapFunctionStations(updateStationSelected);
-    mapFunctionStationsAsync(revalidateStation);
+    //mapFunctionStationsAsync(revalidateStation);
 }
 
 function revalidateStation(station){
@@ -720,7 +905,7 @@ function stationDataHandler(response) {
     for (var i = 0; i < rows.length; i++) {
         var item = rows[i];
         var name = item[nameCol];
-        var id = parseInt(item[idCol]);
+        var id = parseInt(item[idCol], 10);
 
         var marker = new google.maps.Marker({
             id: id,
@@ -729,10 +914,10 @@ function stationDataHandler(response) {
                                             icon: {
                                                 path: google.maps.SymbolPath.CIRCLE,
                                             scale: 2,
-                                            strokeOpacity: 1,
+                                            strokeOpacity: 0.4,
                                             strokeWeight: 1,
                                             fillColor: "#FFFFFF",
-                                            fillOpacity: 0.5,
+                                            fillOpacity: defStationOpacity,
                                             },
                                             map: map,
                                             name: name,
@@ -753,8 +938,146 @@ var lineSymbol = {path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW};
 function setStationMarkerListeners(stationMarker){
     google.maps.event.addListener(stationMarker, 'click', function() {
         this.selected = !this.selected;
-        updateStationSelected(this);
+		updateStationSelected(this);
+		revalidateStation(this);
+		//Add or remove to selected list
+		if(this.selected){
+			selectedIds.push(this.id);
+            setTimeout(function(){updateDayChart(this.id)}, 100);
+		}else{
+			var index = selectedIds.indexOf(this.id);
+			if(index >= 0){
+				selectedIds.splice(index, 1);
+			}
+		}
+
+		var toDesel = [];
+		while(selectedIds.length > maxNumSelected){
+			stationId = selectedIds.shift();
+            toDesel.push(stationId);
+        }
+        for(var ind in toDesel){
+            var stationId = toDesel[ind];
+			var deselStation = stationMarkers[stationId];
+			deselStation.selected = false;
+			updateStationSelected(deselStation);
+			revalidateStation(deselStation);
+		}
+
+		if(selectedIds.length <= 0){
+			$("#day_chart").hide();
+            mapFunctionStationsAsync(resetMarker);
+		}
+
     });
+}
+
+
+function getAllDayTripQueryURL(stationId, isStart){
+	var id_col_name = "start_station_id";
+	if(!isStart){
+		id_col_name = "end_station_id";
+	}
+	var sql_text = "SELECT start_station_id, end_station_id, " + timeColName + ",COUNT() AS outgoing";
+	sql_text += " FROM " + tripTableId;
+	sql_text += " WHERE " + id_col_name + " = " + stationId;
+	sql_text += " AND " + "start_dow IN (" + getDOWString() + ")";
+	sql_text += " GROUP BY start_station_id, end_station_id, " + timeColName;
+
+	var full_query_url = fusion_query_url + "?key=" + GOOGLE_BROWSER_KEY;
+    full_query_url += "&sql=" + sql_text;
+	return full_query_url
+}
+function updateDayChart(stationId){
+
+	if(chart){
+		//Blank out chart while we load
+		var data = google.visualization.arrayToDataTable([
+			['Time', 'Loading'],
+			['', 0],
+		   ]);
+		chart.draw(data, {});
+		$("#day_chart").show();
+	}
+	station = stationMarkers[stationId];
+	station.allDayTrips = {};
+	handler = getAllDayTripHandler(station);
+
+	var startURL = getAllDayTripQueryURL(stationId, true);
+	$.ajax({url: startURL, success: handler,
+			error: tripErrorHandler});
+
+	var endURL = getAllDayTripQueryURL(stationId, false);
+	graphHandler = function(response){
+		handler(response);
+		redrawDayGraph(station);
+	}
+	$.ajax({url: endURL, success: graphHandler,
+			error: tripErrorHandler});
+
+}
+
+function getAllDayTripHandler(station){
+	return function(response){
+			if((typeof response) == "string"){
+				response = $.parseJSON(response);
+			}
+
+			var columns = response.columns;
+
+			var startIdCol = columns.indexOf('start_station_id');
+			var endIdCol = columns.indexOf('end_station_id');
+			var outgoingCol = columns.indexOf('outgoing');
+			var timeCol = columns.indexOf(timeColName);
+
+			if(!("rows" in response)){
+				response.rows = [];
+			}
+
+			var rows = response.rows;
+			var item, timeStr, minutes, outgoing, adjTime;
+			var bucketSize = timeIncrMin;
+			var allDayTrips = station.allDayTrips;
+
+			for (var i = 0; i < rows.length; i++) {
+				item = rows[i];
+
+				timeStr = item[timeCol];
+				minutes = getMinutes(timeStr);
+				adjTime = minutes - timeHalfWidth;
+				if(adjTime < 0){
+					adjTime = MINUTES_IN_DAY + adjTime;
+				}
+				bucket = bucketSize*Math.floor(adjTime/bucketSize);
+				outgoing = parseInt(item[outgoingCol], 10);
+
+				if(bucket in allDayTrips){
+					allDayTrips[bucket] += outgoing;
+				}else{
+					allDayTrips[bucket] = outgoing;
+				}
+			}
+	}
+}
+
+function redrawDayGraph(station){
+	var data = new google.visualization.DataTable();
+	data.addColumn('string', 'Time');
+	data.addColumn('number', 'Avg. Activity');
+	var rows = [];
+	for (var minBucket in station.allDayTrips) {
+		var timeStr = getHourMinStr(minBucket);
+		var activity = station.allDayTrips[minBucket];
+		activity /= station.days_active;
+		activity = scaleByDOW(activity);
+		rows.push([timeStr, activity]);
+	}
+	data.addRows(rows);
+
+	chart = new google.visualization.LineChart(document.getElementById('day_chart'));
+	var options = {title: station.name + ' Activity',
+					height: 600};
+	chart.draw(data, options);
 }
 
 /*
@@ -794,13 +1117,15 @@ function drawPath(mainMarker, otherMarker, outgoing){
 	weight *= 20.0 / days_active;
 	weight = scaleByDOW(weight);
 	weight = Math.min(10, weight);
-	var colorWeight = weight;
+	//var colorWeight = weight;
+  var strokeColor = mainMarker.getIcon().fillColor;
 
-	if(!outgoing){
+  //var isRed = (strokeColor[4] < 5);
+
+	/*if(!outgoing){
 		colorWeight *= -colorWeight;
 	}
-
-	var strokeColor = getColorStr(colorWeight*stationColorScale/50);
+	var strokeColor = getColorStr(colorWeight*stationColorScale/50);*/
 	if(otherMarker.id == mainMarker.id){
 		var pathCoords = generateSelfLoop(mainMarker.position);
 	}else{
@@ -817,7 +1142,7 @@ function drawPath(mainMarker, otherMarker, outgoing){
 		path: pathCoords,
 		strokeColor: strokeColor,
 		strokeOpacity: 0.9,
-		strokeWeight: Math.max(1.0, weight),
+		strokeWeight: Math.max(1, Math.min(weight,4)),
 		icons: [{icon: lineSymbol,
 				 offset: '100%'}]
 	});
@@ -833,27 +1158,53 @@ function drawPath(mainMarker, otherMarker, outgoing){
     *    Update graph for a station being selected or not
     */
 function updateStationSelected(station){
-    if(station.selected){
-        station.getIcon().strokeWeight = 3;
+
+    var tempIcon = station.getIcon();
+    if(station.selected)
+    {
+        var allStations = [];
+
+        for (property in stationMarkers) {
+            if(stationMarkers.hasOwnProperty(property)){
+                allStations.push(property);
+            }
+        }
+
+        var outgoingStations = [];
+        var incomingStations = [];
 
         //Only show up to maxNumberArrows
         //First sort descending
         var outgoingIds = getSortedIds(station.outgoing.weights, maxNumberArrows);
         for(var ind=0; ind < outgoingIds.length; ind++){
             var destMarker = stationMarkers[outgoingIds[ind]];
+            outgoingStations.push(outgoingIds[ind]);
             drawPath(station, destMarker, true);
+            //Redraw with correct color in case it was previously grayed out
+            resetMarker(destMarker);
         }
-
 
         var incomingIds = getSortedIds(station.incoming.weights, maxNumberArrows);
         for(var ind=0; ind < incomingIds.length; ind++){
             var destMarker = stationMarkers[incomingIds[ind]];
+            incomingStations.push(incomingIds[ind]);
             if(station == destMarker){
             	continue;
             }
             drawPath(station, destMarker, false);
+            //Redraw with correct color in case it was previously grayed out
+            resetMarker(destMarker);
+        }
+        var stationsToGray = _.difference(allStations, _.union(outgoingStations, incomingStations));
+        for(var ind=0; ind < stationsToGray.length; ind++){
+            var marker = stationMarkers[stationsToGray[ind]];
+            grayStationOut(marker);
         }
 
+        tempIcon.strokeWeight = 3;
+        tempIcon.strokeColor = '#FFFFFF';
+        tempIcon.fillOpacity = 0.9;
+        tempIcon.fillColor = '#00FFE4';
 
         //InfoWindow to display information persistently when selected
 		if(!('infoWindow' in station)){
@@ -865,23 +1216,49 @@ function updateStationSelected(station){
 		station.infoWindow = infoWindow;
         }
         station.infoWindow.open(map, station);
-    }else{
-       clearStationPaths(station);
-        if(station.hasOwnProperty('infoWindow')){
-            station.infoWindow.close();
-        }
-    }
+  }
+  else
+  {
+    resetMarker(station);
+  }
+  station.setIcon(tempIcon);
 }
 
+function resetMarker(station){
+    var tempIcon = station.getIcon();
+    clearStationPaths(station);
+    if(station.hasOwnProperty('infoWindow')){
+        station.infoWindow.close();
+    }
+
+    tempIcon.fillOpacity = defStationOpacity;
+    tempIcon.fillColor = station.tripColorStr;
+    station.setIcon(tempIcon);
+}
 
 //Generates a self loop, counter clockwise, northeast
 function generateSelfLoop(location){
-    var dlat = 0.006;
-    var dlng = 0.006;
-    var end = new google.maps.LatLng(location.lat() + dlat, location.lng() + dlng);
-    var firstPart = generateCurvedLine(location, end, 2);
-    var secondPart = generateCurvedLine(end, location, 2);
-    return firstPart.concat(secondPart);
+    var rad = 0.003;
+	//This variable serves to instruct where the start location
+	//is on the radius of the circle being plotted
+	var start_theta = -3*Math.PI/4;
+	var offset_lng = location.lng() - rad * Math.cos(start_theta);
+	var offset_lat = location.lat() - rad * Math.sin(start_theta);
+	var num_points = 32;
+	var dtheta = 2*Math.PI/num_points;
+	var curvePoints = [location];
+
+	var next_lng = 0;
+	var next_lat = 0;
+	var cur_theta = start_theta;
+	for(var ii= 1; ii < num_points; ii++){
+		cur_theta += dtheta;
+		next_lng = offset_lng + rad * Math.cos(cur_theta);
+		next_lat = offset_lat + rad * Math.sin(cur_theta);
+		curvePoints.push(new google.maps.LatLng(next_lat, next_lng, true));
+	}
+	curvePoints.push(location);
+    return curvePoints;
 }
 
 
@@ -990,6 +1367,17 @@ function clearStationPaths1D(pathObj){
         path.setMap(null);
         path = null;
     }
+}
+
+function grayStationOut(station){
+    var tempIcon = station.getIcon();
+    tempIcon.fillOpacity = 0;
+    tempIcon.strokeOpacity = .4;
+    station.setIcon(tempIcon);
+    if(station.hasOwnProperty('infoWindow')){
+        station.infoWindow.close();
+    }
+
 }
 
 /*

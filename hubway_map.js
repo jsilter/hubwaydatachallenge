@@ -44,7 +44,7 @@ var MINUTES_IN_DAY = 24*60;
 var MIN_RETRY_INTERVAL = 0.2;
 var retryInterval = MIN_RETRY_INTERVAL;
 
-var stationSizeScale = 20;
+var stationSizeScale = 10;
 var stationColorScale = 500;
 var timeIncrMin = 15;
 var timeHalfWidth = timeIncrMin;
@@ -69,7 +69,7 @@ var isPlaying = false;
 var counterId = -1;
 
 var map;
-var chart;
+var dayChart, barChart;
 var bikeLayer;
 var popLayer;
 
@@ -153,10 +153,9 @@ function getMinutes(hourMinStr){
 $(document).ready(initialize);
 function initialize()
 {
-  initializeMenu();
+	initializeMenu();
 
-  //jQuery.noConflict();
-	//google.load('visualization', '1', {packages: ['corechart']});
+
     $("#nojavascript").hide();
 	base_url = $.url().attr('source').split('?')[0];
 
@@ -172,7 +171,7 @@ Generate string containing all necessary query parameters
 to recreate this graph
 */
 function createURLParams(){
-	out_comps = ["time=" + getSliderTime()];
+	out_comps = ["time=" + getSliderTimeBounds()];
 	out_comps.push("stationSizeScale=" + stationSizeScale);
 	out_comps.push("stationColorScale=" + stationColorScale);
 	out_comps.push("dow=" + getDOWString());
@@ -247,10 +246,13 @@ function initializeControls(){
 
     $("#week li").click(function(){
         if(changesEnabled){
-            displayTrips(getSliderTime());
-            if(selectedIds){
+            displayTrips(getSliderTimeBounds());
+            //Do this in updateStationSelected
+            if(false && selectedIds){
             	for(ind in selectedIds){
-            		redrawDayGraph(stationMarkers[selectedIds[ind]]);
+					var stationMarker = stationMarkers[selectedIds[ind]];
+					//setTimeout(function(){redrawDayGraph(stationMarker)}, 100);
+					//setTimeout(function(){redrawActivityBarGraph(stationMarker)}, 100);
             	}
             }
         }
@@ -269,8 +271,10 @@ function initializeControls(){
 
     $('#show-bike').change(function(){
         if(this.checked){
+            map.setMapTypeId(google.maps.MapTypeId.ROADMAP);
             bikeLayer.setMap(map);
         }else{
+            map.setMapTypeId('map_style');
             bikeLayer.setMap(null);
         }
     });
@@ -296,7 +300,7 @@ function initializeControls(){
 		if(isPlaying){
 			//Fill up cache
 			setLoading(true);
-			var initTime= getSliderTime();
+			var initTime= getSliderTimeBounds()[0];
 			for(var ii= 0; ii < maxCacheSize; ii++){
 				var loadTime = initTime + ii*timeIncrMin;
 				//console.log("preloading " + loadTime);
@@ -313,17 +317,17 @@ function initializeControls(){
 }
 
 function incrTimeForPlay(){
-	var minutes = getSliderTime();
-	minutes += timeIncrMin;
-	if(minutes > MINUTES_IN_DAY - timeIncrMin + 1){
+	var initBounds = getSliderTimeBounds();
+	var newBounds = [initBounds[0] + timeIncrMin, initBounds[1] + timeIncrMin];
+	if(newBounds[1] > MINUTES_IN_DAY - 1){
 		clearInterval(counterId);
 		isPlaying = false;
-		setTimeValue(timeIncrMin, true);
+		//setTimeValues([0, 2*60, true);
 	}else{
-		setTimeValue(minutes, true);
+		setTimeValues(newBounds, true);
 		//Download the next one
-		var loadTime = minutes + (maxCacheSize-1)*timeIncrMin;
-		loadTime = loadTime;
+		var loadTime = [newBounds[0] + (maxCacheSize-1)*timeIncrMin,
+							newBounds[1] + (maxCacheSize-1)*timeIncrMin];
 		downloadTrips(loadTime);
 	}
 }
@@ -355,7 +359,7 @@ function getMultiCheckBoxSelector(daySelectors){
         }
 
         changesEnabled = true;
-        displayTrips(getSliderTime());
+        displayTrips(getSliderTimeBounds());
     };
 
 }
@@ -401,11 +405,11 @@ function setStationColorScale(uivalue, setUI){
     redrawStations();
 }
 
-function setTimeValue(minutes, setUI){
+function setTimeValues(values, setUI){
     if(setUI){
-        $("#myTimeSlider").slider('value', minutes)
+        $("#myTimeSlider").slider('values', values);
     }
-    $("#myTimeLabel").text(getHourMinStr(minutes));
+    $("#myTimeLabel").text(getHourMinStr(values[0]) + "-" + getHourMinStr(values[1]));
 }
 
 function setLoading(loading){
@@ -419,20 +423,23 @@ function setLoading(loading){
 }
 
 function initializeTimeSlider(){
-    var max = MINUTES_IN_DAY - timeIncrMin;
+    var max = MINUTES_IN_DAY - 1;
+	var initValues = [11*60, 13*60];
     var slider = $("#myTimeSlider").slider({
+		range: true,
         step: timeIncrMin,
-        min: timeIncrMin,
+        min: 0,
         max: max,
+		values: initValues,
         slide: function(event, ui){
-            setTimeValue(ui.value, false);
+            setTimeValues(ui.values, false);
         }
     });
     //Don't want to query when initializing slider,
     //so we set the change listener after
-    setTimeValue(MINUTES_IN_DAY / 2, true);
+    setTimeValues(initValues, true);
     slider.bind('slidechange', function(event, ui){
-        displayTrips(getSliderTime());
+        displayTrips(getSliderTimeBounds());
     });
 }
 
@@ -649,7 +656,7 @@ function scaleByDOW(scalar){
 }
 
 //Linearly interpolate flux to get color
-//blue if negative, red if positive
+//red if negative, green if positive
 //We fix the saturation, move intensity from high (white)
 //to low (colored) as colorValue increases
 function getColorStr(colorValue){
@@ -661,33 +668,33 @@ function getColorStr(colorValue){
     var maxIntens = 65;
     var intens =  Math.max(Math.min(maxIntens - Math.abs(absColor), maxIntens), minIntens);
     var saturation = 100;
-    var redHue = 80;
-    var blueHue = 20;
+    var posHue = 80;
+    var negHue = 20;
     var pathHue = 34;
 
     var colorStr = "hsl("
     if(path){
         colorStr +=  pathHue;
     }else if(colorValue >= 0){
-        colorStr += redHue;
+        colorStr += posHue;
     }else{
-        colorStr += blueHue;
+        colorStr += negHue;
     }
     colorStr += "," + saturation + "%," + intens + "%)"
     return colorStr;
 }
 
-function getSliderTime(){
-	return $("#myTimeSlider").slider('value');
+function getSliderTimeBounds(){
+	return $("#myTimeSlider").slider('values');
 }
 /*
  *    Get a clause suitable for SQL based on time controls
  */
-function getDateTimeClause(midTimeVal){
+function getDateTimeClause(timeBounds){
     var dowString = getDOWString();
 
-    var minTimeStr = getHourMinStr(midTimeVal - timeHalfWidth);
-    var maxTimeStr = getHourMinStr(midTimeVal + timeHalfWidth);
+    var minTimeStr = getHourMinStr(timeBounds[0]);
+    var maxTimeStr = getHourMinStr(timeBounds[1]);
 
     //Note the single quotes around the time
     var outStr = timeColName + " >= '" + minTimeStr + "' AND " + timeColName + " < '" + maxTimeStr + "'";
@@ -696,7 +703,7 @@ function getDateTimeClause(midTimeVal){
     return outStr;
 }
 
-function generateTripQueryURL(midTimeVal){
+function generateTripQueryURL(timeBounds){
 	//This throws a parser error sometimes due to Nan or Null when ids are bad, so we apply a rather pointless filter
     var sql_text = "SELECT start_station_id, end_station_id, COUNT() AS outgoing";
 	//sql_text += ", min_station_id"
@@ -704,7 +711,7 @@ function generateTripQueryURL(midTimeVal){
     sql_text += " WHERE start_station_id >= 0 AND end_station_id >= 0";
 
     //Filter by time and day of week.
-    sql_text += " AND " + getDateTimeClause(midTimeVal);
+    sql_text += " AND " + getDateTimeClause(timeBounds);
     //Only interested in aggregate statistics here
     sql_text += " GROUP BY start_station_id, end_station_id"; //,min_station_id
 	//So we can render one station at a time
@@ -715,24 +722,25 @@ function generateTripQueryURL(midTimeVal){
 
 	return full_query_url;
 }
-function displayTrips(midTimeVal){
+function displayTrips(timeBounds){
 	if(!changesEnabled){
 		return downloadTrips(midTimeVal);
 	}
-	var cacheKey = midTimeVal + getDOWString();
+	var cacheKey = timeBounds + getDOWString();
+	//console.log(cacheKey);
     var handler = getDisplayTripHandler(cacheKey);
-	return downloadOrDisplayTrips(midTimeVal, cacheKey, handler);
+	return downloadOrDisplayTrips(timeBounds, cacheKey, handler);
 }
 
-function downloadTrips(midTimeVal){
-	var cacheKey = midTimeVal + getDOWString();
+function downloadTrips(timeBounds){
+	var cacheKey = timeBounds + getDOWString();
     var handler = getDownloadTripHandler(cacheKey);
-	return downloadOrDisplayTrips(midTimeVal, cacheKey, handler);
+	return downloadOrDisplayTrips(timeBounds, cacheKey, handler);
 }
 
-function downloadOrDisplayTrips(midTimeVal, cacheKey, handler){
+function downloadOrDisplayTrips(timeBounds, cacheKey, handler){
 	setLoading(true);
-	var full_query_url = generateTripQueryURL(midTimeVal);
+	var full_query_url = generateTripQueryURL(timeBounds);
 
 	//Check cache, use that value if we have it
 	var jsonResponse = responseCache.get(cacheKey);
@@ -750,7 +758,7 @@ function tripErrorHandler(jqXHR, textStatus, errorThrown){
 	if(jqXHR.status >= 500){
 		console.log("tripErrorHandler retrying");
 		errorThrown = "Error loading trip data; retrying in " + retryInterval.toFixed(2) + " seconds";
-		setTimeout(function(){displayTrips(getSliderTime());}, retryInterval*1000);
+		setTimeout(function(){displayTrips(getSliderTimeBounds());}, retryInterval*1000);
 	}
 
 	errorHandler(jqXHR, textStatus, errorThrown);
@@ -810,8 +818,8 @@ function tripDataHandler(response) {
     for (var i = 0; i < rows.length; i++) {
         var item = rows[i];
 
-        var startId = parseInt(item[startIdCol], 10);
-        var endId = parseInt(item[endIdCol], 10);
+        var startId = item[startIdCol]
+        var endId = item[endIdCol]
 		//var minId = parseInt(item[minIdCol]);
 
         var numOutgoing = parseInt(item[outgoingCol], 10);
@@ -824,8 +832,6 @@ function tripDataHandler(response) {
     }
 
 	redrawStations();
-    //
-    //mapFunctionStationsAsync(revalidateStation);
 
     setLoading(false);
 	return response;
@@ -855,8 +861,9 @@ function recalcStationProps(stationMarker){
         flux = scaleByDOW(flux);
 
         stationMarker.title = stationMarker.name;
-        stationMarker.title += "\nAvg. Daily Activity: " + activity.toFixed(2);
-        stationMarker.title += "\nAvg. Daily Flux: " + flux.toFixed(2);
+        stationMarker.title += "\nAvg. Daily Activity: " + activity.toFixed(2) + " trips";
+        stationMarker.title += "\nAvg. Daily Flux: " + flux.toFixed(2) +
+        " trips";
 
 		var cur_scale = Math.sqrt(activity) * stationSizeScale;
 		cur_scale = Math.max(2, cur_scale);
@@ -905,7 +912,7 @@ function stationDataHandler(response) {
     for (var i = 0; i < rows.length; i++) {
         var item = rows[i];
         var name = item[nameCol];
-        var id = parseInt(item[idCol], 10);
+        var id = item[idCol];
 
         var marker = new google.maps.Marker({
             id: id,
@@ -913,7 +920,7 @@ function stationDataHandler(response) {
                                             days_active: item[days_activeCol],
                                             icon: {
                                                 path: google.maps.SymbolPath.CIRCLE,
-                                            scale: 2,
+                                            scale: 1,
                                             strokeOpacity: 0.4,
                                             strokeWeight: 1,
                                             fillColor: "#FFFFFF",
@@ -927,7 +934,7 @@ function stationDataHandler(response) {
     setStationMarkerListeners(marker);
     stationMarkers[id] = marker;
     }
-    displayTrips(getSliderTime());
+    displayTrips(getSliderTimeBounds());
 }
 
 
@@ -940,12 +947,14 @@ function setStationMarkerListeners(stationMarker){
         this.selected = !this.selected;
 		updateStationSelected(this);
 		revalidateStation(this);
+        var thisStationId = this.id;
 		//Add or remove to selected list
 		if(this.selected){
-			selectedIds.push(this.id);
-            setTimeout(function(){updateDayChart(this.id)}, 100);
+            selectedIds.push(thisStationId);
+            //setTimeout(function(){updateDayChart(thisStationId)}, 100);
+			//setTimeout(function(){redrawActivityBarGraph(stationMarker)}, 100);
 		}else{
-			var index = selectedIds.indexOf(this.id);
+			var index = selectedIds.indexOf(thisStationId);
 			if(index >= 0){
 				selectedIds.splice(index, 1);
 			}
@@ -953,7 +962,7 @@ function setStationMarkerListeners(stationMarker){
 
 		var toDesel = [];
 		while(selectedIds.length > maxNumSelected){
-			stationId = selectedIds.shift();
+			var stationId = selectedIds.shift();
             toDesel.push(stationId);
         }
         for(var ind in toDesel){
@@ -965,10 +974,10 @@ function setStationMarkerListeners(stationMarker){
 		}
 
 		if(selectedIds.length <= 0){
-			$("#day_chart").hide();
+			$("#bar_chart").hide();
+            $("#bar_chartInstruction").show();
             mapFunctionStationsAsync(resetMarker);
 		}
-
     });
 }
 
@@ -990,25 +999,25 @@ function getAllDayTripQueryURL(stationId, isStart){
 }
 function updateDayChart(stationId){
 
-	if(chart){
-		//Blank out chart while we load
+	if(dayChart){
+		//Blank out dayChart while we load
 		var data = google.visualization.arrayToDataTable([
 			['Time', 'Loading'],
 			['', 0],
 		   ]);
-		chart.draw(data, {});
+		dayChart.draw(data, {});
 		$("#day_chart").show();
 	}
-	station = stationMarkers[stationId];
+	var station = stationMarkers[stationId];
 	station.allDayTrips = {};
-	handler = getAllDayTripHandler(station);
+	var handler = getAllDayTripHandler(station);
 
 	var startURL = getAllDayTripQueryURL(stationId, true);
 	$.ajax({url: startURL, success: handler,
 			error: tripErrorHandler});
 
 	var endURL = getAllDayTripQueryURL(stationId, false);
-	graphHandler = function(response){
+	var graphHandler = function(response){
 		handler(response);
 		redrawDayGraph(station);
 	}
@@ -1074,10 +1083,61 @@ function redrawDayGraph(station){
 	}
 	data.addRows(rows);
 
-	chart = new google.visualization.LineChart(document.getElementById('day_chart'));
+	dayChart = new google.visualization.LineChart(document.getElementById('day_chart'));
 	var options = {title: station.name + ' Activity',
 					height: 600};
-	chart.draw(data, options);
+	dayChart.draw(data, options);
+}
+
+function redrawActivityBarGraph(station){
+    $("#bar_chartInstruction").hide();
+	var data = new google.visualization.DataTable();
+	data.addColumn('string', 'Station');
+	data.addColumn('number', 'Going to');
+	data.addColumn('number', 'Coming from');
+
+	//Add up to get total activity
+	//Only select the top 10
+	activities = {}
+	var stationIds = getAllStationIds();
+	for(var destIndex in stationIds){
+		var destId = stationIds[destIndex];
+		var activity = station.outgoing.weights[destId] + station.incoming.weights[destId];
+		activity /= Math.min(station.days_active, stationMarkers[destId].days_active);
+		activity = scaleByDOW(activity);
+		activities[destId] = activity;
+	}
+	var destIds = getSortedIds(activities, maxNumberArrows*2);
+
+	var rows = [];
+	var days_active = station.days_active;
+	for (var outgoingIndex in destIds) {
+		var outgoingId = destIds[outgoingIndex];
+		if(outgoingId == station.id){
+			continue;
+		}
+		var outgoing = station.outgoing.weights[outgoingId]/days_active;
+		var incoming = station.incoming.weights[outgoingId]/days_active;
+		outgoing = scaleByDOW(outgoing);
+		incoming = scaleByDOW(incoming);
+		var name = stationMarkers[outgoingId].name;
+		rows.push([name, outgoing, incoming]);
+	}
+	data.addRows(rows);
+
+	barChart = new google.visualization.BarChart(document.getElementById('bar_chart'));
+	var options = {title: station.name + ' Destinations',
+					height: 600,
+					isStacked: true,
+                    colors: ['#b1d147', '#D05006'],
+                    titleTextStyle: {color: '#6F6F6F', fontName: 'Londrina Solid', fontSize: 20},
+                    vAxis: {textStyle: {color: '#6F6F6F', fontName: 'Times', fontSize: 16}},
+                    hAxis: {textStyle: {color: '#6F6F6F', fontName: 'Times', fontSize: 16}},
+                    legend: {position: 'top', textStyle: {color: '#6F6F6F', fontName: 'Times', fontSize: 16}},
+                    chartArea: {left: 300}
+                  };
+
+	barChart.draw(data, options);
 }
 
 /*
@@ -1089,11 +1149,11 @@ function getSortedIds(weights, maxNum){
     for(id in weights){
         ids.push(id);
     }
+    ids.sort(function(a_id, b_id){
+        return weights[b_id] - weights[a_id];
+    });
     if(ids.length > maxNum){
-    	ids.sort(function(a_id, b_id){
-                    return weights[b_id] - weights[a_id];
-                });
-                ids = ids.slice(0, maxNum);
+        ids = ids.slice(0, maxNum);
     }
     return ids;
 }
@@ -1154,6 +1214,17 @@ function drawPath(mainMarker, otherMarker, outgoing){
 	}
 	curPath.setMap(map);
 }
+
+
+function getAllStationIds(){
+	var allStations = [];
+	for (property in stationMarkers) {
+		if(stationMarkers.hasOwnProperty(property)){
+			allStations.push(property);
+		}
+	}
+	return allStations
+}
 /*
     *    Update graph for a station being selected or not
     */
@@ -1162,14 +1233,7 @@ function updateStationSelected(station){
     var tempIcon = station.getIcon();
     if(station.selected)
     {
-        var allStations = [];
-
-        for (property in stationMarkers) {
-            if(stationMarkers.hasOwnProperty(property)){
-                allStations.push(property);
-            }
-        }
-
+		var allStations = getAllStationIds();
         var outgoingStations = [];
         var incomingStations = [];
 
@@ -1203,19 +1267,37 @@ function updateStationSelected(station){
 
         tempIcon.strokeWeight = 3;
         tempIcon.strokeColor = '#FFFFFF';
-        tempIcon.fillOpacity = 0.9;
+        tempIcon.fillOpacity = 0.5;
         tempIcon.fillColor = '#00FFE4';
 
         //InfoWindow to display information persistently when selected
 		if(!('infoWindow' in station)){
-			var infoWindow = new google.maps.InfoWindow({
-				content: station.title.replace(/\n/g, "<br/>"),
+			var contentString = '<div id="infoWindow">';
+            contentString += station.title.replace(/\n/g, "<br/>");
+            contentString += '<div id="infoWindowButton">'+'<a href="#" onClick="returnToStats()" class="viewStats">View Stats</a>'+'</div>';
+            contentString += '</div>';
+            var infoWindow = new google.maps.InfoWindow({
+				content: contentString,
 				flat: true,
 				shadow: ""
 			});
 		station.infoWindow = infoWindow;
+
+          /*$("#viewStats").click(function()
+          {
+            returnToStats();
+          });*/
+
+        var statString = genStationStatString(station);
+        $("#statsDivContent").html(statString);
+
         }
         station.infoWindow.open(map, station);
+        setTimeout(function(){redrawActivityBarGraph(station)}, 100);
+        //console.log(genStationStatString(station));
+
+        var statString = genStationStatString(station);
+        $("#statsDivContent").html(statString);
   }
   else
   {
@@ -1401,5 +1483,78 @@ function mapFunctionStationsAsync(func) {
         setTimeout(function(){func(station)}, 0);
     };
     mapFunctionStations(newFunc);
+}
+
+/**
+ * Generate statistics string,
+ * showing most common sources/destinations
+ * for the given station_id
+ */
+function genStationStatString(station){
+    if(!selectedIds)
+    {
+        var str = "<div id='statsDivContent'>An overview of any station can be found here once you have selected one. </br></div>";
+        return str;
+    }
+   var str = "<p class='statContent_StationName'>" + station.name + "</p>";
+   var timeValues = $("#myTimeSlider").slider('values');
+   str += "<p class='statContent_Time'>" + "From..." + getHourMinStr(timeValues[0]) + "</br> To......." + getHourMinStr(timeValues[1]) + "</p>";
+
+   percentIncoming = {};
+   percentOutgoing = {};
+   totalActivity = {};
+   var stationIds = getAllStationIds();
+   for(var index in stationIds){
+       var id = stationIds[index];
+       var incoming = station['incoming'].weights[id]/station['incoming'].total;
+       var outgoing = station['outgoing'].weights[id]/station['outgoing'].total;
+       percentIncoming[id] = incoming*100;
+       percentOutgoing[id] = outgoing*100;
+
+       totalActivity[id] = stationMarkers[id].incoming.total + stationMarkers[id].outgoing.total;
+   }
+   var maxNum = 5;
+   var incomingIds = getSortedIds(percentIncoming, maxNum);
+   var outgoingIds = getSortedIds(percentOutgoing, maxNum+1);
+   var sortedActivity = getSortedIds(totalActivity, 50000);
+   var rank = sortedActivity.indexOf(station.id) + 1;
+
+   str += "</br>Ranked " + rank + " / " + sortedActivity.length + " in activity";
+
+   str += "</br></br>People arriving at this station tended to come from: </br> ";
+   str += getTopOtherStationString(incomingIds, percentIncoming, station, maxNum, false);
+
+   str += "</br></br>People leaving this station tended to go to: </br>";
+   str += getTopOtherStationString(outgoingIds, percentOutgoing, station, maxNum, true);
+   return str;
+
+}
+
+/**
+ * Get the top maxNum stations string showing name and fraction (from percents), skipping the stationId
+ * if skipSelf is true. ids should be a descending ranked array, strings will be listed in that order
+ */
+function getTopOtherStationString(ids, percents, station, maxNum, skipSelf){
+    var str = "";
+    var count = 0;
+    for (var index in ids) {
+        if(count > maxNum){
+            break;
+        }
+        var id = ids[index];
+        if(id == station.id){
+            if(skipSelf){
+                continue;
+            }
+            str += "</br>This station";
+        }else{
+            str += "</br>" + stationMarkers[id].name;
+        }
+
+        var numStr = "("+ percents[id].toFixed(1) + "%)";
+        str += " " + numStr;
+        count += 1;
+    }
+    return str;
 }
 

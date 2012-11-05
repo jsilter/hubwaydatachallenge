@@ -2,33 +2,16 @@
 <head>
     <meta charset="UTF-8"/>
     <title>Hubway Bike Trips shown with Google Maps</title>
-    <style type="text/css">
-        html { width: 100%; display: block; }
-        body { width: 100%; height: 2000px; margin: 0px; padding: 0px;}
-        /*-#main { height: 100%; margin: 0 auto}*/
-        #all{width:100%; height:2000px;}
-        #backgroundDiv{position: absolute; margin: 0; padding: 0; left: 0; top: 0; width: 100%; height: 2000px;}
-        #map_canvas {height: 600px;}
-        #day_chart {position: absolute; margin:0; padding: 0; left: 400px; top: 600px; width: 600px;}
-        #controls {width: 100%; display: none;}
-        .myTimeControlContainer {float: left;}
-        .controlSlider{width: 20%; height: 20px; margin: 0 auto;}
-        #myTimeSliderContainer {width: 20%; height: 50px;}
-        #myTimeSlider {width: 100%; height: 10px}
-        .sliderContainer {float: left;}
-		#share-button {float: right;}
-        #back_img_1{display: none;}
-        #footer{position: relative; left: 0; font-size: 2000px;}
-    </style>
 </head>
 <script src="underscore-min.js"></script>
-<script src="menu.js"></script>;
+<script src="menu.js"></script>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
 <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/jquery-ui.min.js"></script>
+
 <link rel="stylesheet" href="http://code.jquery.com/ui/1.9.0/themes/base/jquery-ui.css">
 
 
-<link rel="stylesheet" href="menu.css" />-
+<link rel="stylesheet" href="menu.css" />
 
 <!-- Londrina Solid and Josefin Slab from Google Web Fonts -->
 <link href='http://fonts.googleapis.com/css?family=Londrina+Solid' rel='stylesheet' type='text/css'>
@@ -48,15 +31,51 @@
 
 
 <body bgcolor="white">
-<div id="all">
-    <div id="backgroundDiv">
-        <div id="map_canvas">If you see this message for longer than a few seconds, google maps could not load.</div>
-        <img id="back_img_1" style="display:none"/>
 
+
+    <div id="header">
+        <span id="title">The Stations</span>
     </div>
 
-    <div id="day_chart">Click on a station to see the traffic over the course of a day.</div>
+    <div id"mainTabsAndMap">
+        <div id="mainTabs">
+            <ul>
+                <li>
+                    <a href="#" id="mapTab">
+                        <div class="mainTabTitle">Map <span class="arrow">&raquo;</span></div>
+                        <p>Graphical View </p>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="statTab">
+                        <div class="mainTabTitle">Stats <span class="arrow">&raquo;</span></div>
+                        <p>Report View</p>
+                    </a>
+                </li>
+            </ul>    
+        </div>
+        <div id="backgroundDiv">
+            <div id="map_canvas">If you see this message for longer than a few seconds, google maps could not load.</div>
+            <img id="back_img_1" style="display:none"/>
+        </div>
+    </div>
 
+    <!--div id="day_chart">Click on a station to see the traffic over the course of a day</div-->
+    <div id="statsDivWrapper" class="statsDivWrapper_Hidden">
+        <div id="statsDivContent">
+            An overview of any station can be found here once you have selected one. </br>
+        </div>
+        <div id="returnToMap"><a  href='#'>Return To Map >></a></div>
+    </div>
+
+
+    <div id="bar_chartInstruction">
+        Click on a station to see the most common sources and destinations.
+    </div>
+    <div id="bar_chartWrapper">
+    	<div id="bar_chart">
+        </div>
+    </div>
     <div id="menuDiv" class="alpha85">
         <ul id="menu1" class="menu">
             <li class="clickable blackLine" id="li0">
@@ -96,15 +115,15 @@
 
         <ul id="menu2" class="menu">
             <li class="clickable blackLine" id="li2"><a href="#li3">Days Of The Week</a></li>
-            <li id="li3" class="visible_content">
+            <li id="li3" class="hidden_content">
                 <ul id="week">
-                    <li id="liMon" class="daySelected activated_day"><a   class="day" value="0" href="#">m</a></li>
-                    <li id="liTue" class="daySelected activated_day"><a class="day" value="1" href="#">t</a></li>
-                    <li id="liWed" class="daySelected activated_day"><a class="day" value="2" href="#">w</a></li>
-                    <li id="liThu" class="daySelected activated_day"><a class="day" value="3" href="#">th</a></li>
-                    <li id="liFri" class="daySelected activated_day"><a class="day" value="4" href="#">f</a></li>
-                    <li id="liSat" class="daySelected unactivated_day"><a class="day" value="5" href="#">sa</a></li>
-                    <li id="liSun" class="daySelected unactivated_day"><a class="day" value="6" href="#">su</a></li>
+                    <li id="liMon" class="daySelected activated_day" value="0"><a class="day" href="#">m</a></li>
+                    <li id="liTue" class="daySelected activated_day" value="1"><a class="day" href="#">t</a></li>
+                    <li id="liWed" class="daySelected activated_day" value="2"><a class="day" href="#">w</a></li>
+                    <li id="liThu" class="daySelected activated_day" value="3"><a class="day" href="#">th</a></li>
+                    <li id="liFri" class="daySelected activated_day" value="4"><a class="day" href="#">f</a></li>
+                    <li id="liSat" class="daySelected unactivated_day" value="5"><a class="day" href="#">sa</a></li>
+                    <li id="liSun" class="daySelected unactivated_day" value="6"><a class="day" href="#">su</a></li>
                 </ul>
                 <!--<div class="explanation">Perhaps you only want to include weekend data. Or are you the Monday, Wednesday, Friday type?-->
                 <button type="button" id="weekday-button">Toggle Weekdays</button>
@@ -114,9 +133,9 @@
 
         <ul id="menu3" class="menu">
             <li class="clickable blackLine" id="li4"><a href="#li4">More Layers</a></li>
-            <li id="li5" class="visible_content">
+            <li id="li5" class="hidden_content">
                 <div id="layerControlsDiv">
-                    <input type="checkbox" id="show-bike" checked="true"> Show Bike Paths
+                    <input type="checkbox" id="show-bike"> Show Bike Paths
                      <br/> <br/>
                     <input type="checkbox" id="show-population"> Show Population
                 </div>
@@ -125,7 +144,7 @@
 
         <ul id="menu4" class="menu">
             <li class="clickable blackLine" id="li6"><a href="#li7">View Options</a></li>
-            <li id="li7" class="visible_content">
+            <li id="li7" class="hidden_content">
                 <div id="scaleSliders">
                     <div id="sizeSliderDiv" class="sliderContainer">
                         Station Size
@@ -146,7 +165,7 @@
                 This site requires javascript to view.
         </div>
        <div id="controls" style="display:none">
-            <div id="myTimeControls">
+            <!--<div id="myTimeControls">
                 <div id="myTimeSliderContainer" class="myTimeControlContainer">
                     Time: <a class="label" id="myTimeLabel">Time Label</a>
                     <div class="controlSlider" id="myTimeSlider"/></div>
@@ -159,7 +178,7 @@
     				<input type="checkbox" id="show-population">Show Population
                 </div>
                 <div class="myTimeControlContainer">
-                    Days of the Week:
+                    Days of the Week:-->
                     <!--form id="DOW">
                         <input type="checkbox" class="weekday" value="0" checked="true">Mon
                         <input type="checkbox" class="weekday" value="1" checked="true">Tues
@@ -175,16 +194,14 @@
     					<div id="permalink-dialog" title="Permalink" style="display:none">
     					<a id="permalink-text"></a>
     					</div-->
-
-    					<br>
                     </form>
-                </div>
+        </div>
             </div>
     	</div>
         </div>
         <br/>
     </div>
-</div><!--all-->
+
 </body>
 
 </html>

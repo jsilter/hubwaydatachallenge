@@ -29,7 +29,7 @@ var stationTableId = "1TYoxLzEiq38FCr5N6iP-x_IF5JcP4qvuiH0vUvo";
 var testTripTableId = "1PEvVQaoTQ29WdGQr-XdlbZS2ocX6Z1xqFXlsjeo";
 var fullTripTableId = "1XbTMbt4SDu8HBfJ7mJKTv5m9NLWyupfyfVudu0g";
 //census data
-var populationTableId = "1slogrMbvfK9uhACNjDBjwf9aiTzM4vfgRo6GRNY"
+var populationTableId = "1slogrMbvfK9uhACNjDBjwf9aiTzM4vfgRo6GRNY";
 var tripTableId = fullTripTableId;
 
 
@@ -37,15 +37,15 @@ var weekends = ["#liSat", "#liSun"];
 var weekdays = ["#liMon", "#liTue", "#liWed", "#liThu", "#liFri"];
 //-----------------------//
 
-var timeColName = "start_time"
+var timeColName = "start_time";
 
 var MINUTES_IN_DAY = 24*60;
 //For retrying on failure
 var MIN_RETRY_INTERVAL = 0.2;
 var retryInterval = MIN_RETRY_INTERVAL;
 
-var stationSizeScale = 10;
-var stationColorScale = 500;
+var stationSizeScale = 6;
+var stationColorScale = 300;
 var timeIncrMin = 15;
 var timeHalfWidth = timeIncrMin;
 var startLat = 42.357053;
@@ -63,7 +63,7 @@ var maxNumSelected = 1;
 var selectedIds = [];
 
 //Gets rewritten in initialize. Used for shortening URL
-var base_url = "http://www.example.com/hubway_map.html"
+var base_url = "http://www.example.com/hubway_map.html";
 
 var isPlaying = false;
 var counterId = -1;
@@ -80,7 +80,7 @@ var responseCache = new ResponseCache(maxCacheSize);
 function ResponseCache(maxNum){
 	this.maxNum = maxNum;
 	this.objects = {};
-	this.keys = []
+	this.keys = [];
 
 	this.put = function(key, object){
 		if(!(key in this.objects)){
@@ -92,7 +92,7 @@ function ResponseCache(maxNum){
 			var remkey = this.keys.shift();
 			delete this.objects[remkey];
 		}
-	}
+	};
 
 	//Get the object represented by key,
 	//or null if it doesn't exist.
@@ -103,7 +103,7 @@ function ResponseCache(maxNum){
 		}else{
 			return null;
 		}
-	}
+	};
 
 	this.pop = function(key){
 		var index = this.keys.indexOf(key);
@@ -114,12 +114,12 @@ function ResponseCache(maxNum){
 		}else{
 			return null;
 		}
-	}
+	};
 
 	this.clear = function(){
 		this.objects = {};
 		this.keys = [];
-	}
+	};
 }
 
 /*
@@ -207,7 +207,7 @@ function parseURLparams(params){
             $(this).removeClass("activated_day unactived_day");
             if(isActive)
             {
-                $(this).addClass("activated_day")
+                $(this).addClass("activated_day");
             }
             else
             {
@@ -352,7 +352,7 @@ function getMultiCheckBoxSelector(daySelectors){
         {
             $(daySelectors[i]).removeClass("activated_day unactivated_day");
             if(allSelected){
-                $(daySelectors[i]).addClass("unactivated_day")
+                $(daySelectors[i]).addClass("unactivated_day");
             }else{
                 $(daySelectors[i]).addClass("activated_day");
             }
@@ -391,7 +391,7 @@ function getMultiCheckBoxSelector(checkBoxSelector){
 
 function setStationSizeScale(uivalue, setUI){
     if(setUI){
-        $(".controlSlider#stationSizeScale").slider('value', uivalue)
+        $(".controlSlider#stationSizeScale").slider('value', uivalue);
     }
     stationSizeScale = uivalue
     redrawStations();
@@ -399,9 +399,9 @@ function setStationSizeScale(uivalue, setUI){
 
 function setStationColorScale(uivalue, setUI){
     if(setUI){
-        $(".controlSlider#stationColorScale").slider('value', uivalue)
+        $(".controlSlider#stationColorScale").slider('value', uivalue);
     }
-    stationColorScale = uivalue
+    stationColorScale = uivalue;
     redrawStations();
 }
 
@@ -424,7 +424,7 @@ function setLoading(loading){
 
 function initializeTimeSlider(){
     var max = MINUTES_IN_DAY - 1;
-	var initValues = [11*60, 13*60];
+	var initValues = [10*60, 14*60];
     var slider = $("#myTimeSlider").slider({
 		range: true,
         step: timeIncrMin,
@@ -433,7 +433,8 @@ function initializeTimeSlider(){
 		values: initValues,
         slide: function(event, ui){
             setTimeValues(ui.values, false);
-        }
+        },
+        isDragging: false
     });
     //Don't want to query when initializing slider,
     //so we set the change listener after
@@ -441,6 +442,55 @@ function initializeTimeSlider(){
     slider.bind('slidechange', function(event, ui){
         displayTrips(getSliderTimeBounds());
     });
+
+    var moveHandler = function(eventData){
+    	var sldr = slider;
+        if(sldr.isDragging){
+            var dxPix = eventData.pageX - sldr.startLeftPix;
+            var dTime = dxPix*sldr.timePerPix;
+
+            var newStart = sldr.startTimeValues[0] + dTime;
+            newStart = timeIncrMin * Math.floor(newStart/timeIncrMin);
+            var newEnd = newStart + sldr.timeSpan;
+
+            setTimeValues([newStart, newEnd], true);
+        }
+    };
+
+    //Remove default behavior
+    //$("#myTimeSlider").off();
+
+    //Initialize dragging time bar
+    var midRangeSelector = "#myTimeSlider .ui-slider-range";
+
+    $(midRangeSelector).mousedown(function(eventData){
+        slider.isDragging = true;
+        changesEnabled = false;
+        //$(midRangeSelector).mousemove(moveHandler);
+        $("#myTimeSlider").mousemove(moveHandler);
+
+        slider.startTimeValues = $("#myTimeSlider").slider('values');
+        slider.startLeftPix = eventData.pageX;
+
+        var initPixSpan = $(midRangeSelector).width();
+        slider.timeSpan = slider.startTimeValues[1] - slider.startTimeValues[0];
+        slider.timePerPix = slider.timeSpan / initPixSpan;
+
+        eventData.stopPropagation();
+    });
+
+    var stopDragging = function(){
+        slider.isDragging = false;
+        changesEnabled = true;
+        slider.startTimeValues = null;
+        slider.timeSpan = null;
+        $(midRangeSelector).off('mousemove', moveHandler);
+        //We assume the slider has been set correctly
+        displayTrips(getSliderTimeBounds());
+    };
+    $("#myTimeSlider").mouseup(stopDragging);
+
+
 }
 
 function initializeStationScaleSlider(){
@@ -633,7 +683,7 @@ function getDOWCount(){
     var count = 0;
     $("#week li").each(function() {
         if($(this).hasClass("activated_day")){
-            count += 1
+            count += 1;
         }
     });
     return count;
@@ -724,7 +774,7 @@ function generateTripQueryURL(timeBounds){
 }
 function displayTrips(timeBounds){
 	if(!changesEnabled){
-		return downloadTrips(midTimeVal);
+		return downloadTrips(timeBounds);
 	}
 	var cacheKey = timeBounds + getDOWString();
 	//console.log(cacheKey);
@@ -746,7 +796,7 @@ function downloadOrDisplayTrips(timeBounds, cacheKey, handler){
 	var jsonResponse = responseCache.get(cacheKey);
 
 	if(jsonResponse != null){
-		setTimeout(function(){handler(jsonResponse)}, 0);
+		setTimeout(function(){handler(jsonResponse);}, 0);
 	}else{
 		$.ajax({url: full_query_url, success: handler,
 			error: tripErrorHandler});
@@ -818,8 +868,8 @@ function tripDataHandler(response) {
     for (var i = 0; i < rows.length; i++) {
         var item = rows[i];
 
-        var startId = item[startIdCol]
-        var endId = item[endIdCol]
+        var startId = item[startIdCol];
+        var endId = item[endIdCol];
 		//var minId = parseInt(item[minIdCol]);
 
         var numOutgoing = parseInt(item[outgoingCol], 10);
@@ -945,14 +995,10 @@ var lineSymbol = {path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW};
 function setStationMarkerListeners(stationMarker){
     google.maps.event.addListener(stationMarker, 'click', function() {
         this.selected = !this.selected;
-		updateStationSelected(this);
-		revalidateStation(this);
         var thisStationId = this.id;
 		//Add or remove to selected list
 		if(this.selected){
             selectedIds.push(thisStationId);
-            //setTimeout(function(){updateDayChart(thisStationId)}, 100);
-			//setTimeout(function(){redrawActivityBarGraph(stationMarker)}, 100);
 		}else{
 			var index = selectedIds.indexOf(thisStationId);
 			if(index >= 0){
@@ -960,6 +1006,8 @@ function setStationMarkerListeners(stationMarker){
 			}
 		}
 
+
+		//Reset deselected stations to normal
 		var toDesel = [];
 		while(selectedIds.length > maxNumSelected){
 			var stationId = selectedIds.shift();
@@ -972,6 +1020,9 @@ function setStationMarkerListeners(stationMarker){
 			updateStationSelected(deselStation);
 			revalidateStation(deselStation);
 		}
+        
+		updateStationSelected(this);
+		revalidateStation(this);
 
 		if(selectedIds.length <= 0){
 			$("#bar_chart").hide();
@@ -1020,7 +1071,7 @@ function updateDayChart(stationId){
 	var graphHandler = function(response){
 		handler(response);
 		redrawDayGraph(station);
-	}
+	};
 	$.ajax({url: endURL, success: graphHandler,
 			error: tripErrorHandler});
 
@@ -1066,7 +1117,7 @@ function getAllDayTripHandler(station){
 					allDayTrips[bucket] = outgoing;
 				}
 			}
-	}
+	};
 }
 
 function redrawDayGraph(station){
@@ -1098,7 +1149,7 @@ function redrawActivityBarGraph(station){
 
 	//Add up to get total activity
 	//Only select the top 10
-	activities = {}
+	activities = {};
 	var stationIds = getAllStationIds();
 	for(var destIndex in stationIds){
 		var destId = stationIds[destIndex];
@@ -1186,14 +1237,15 @@ function drawPath(mainMarker, otherMarker, outgoing){
 		colorWeight *= -colorWeight;
 	}
 	var strokeColor = getColorStr(colorWeight*stationColorScale/50);*/
+    var pathCoords;
 	if(otherMarker.id == mainMarker.id){
-		var pathCoords = generateSelfLoop(mainMarker.position);
+		pathCoords = generateSelfLoop(mainMarker.position);
 	}else{
 		if(!outgoing){
-			var pathCoords = generateCurvedLine(otherMarker.position,
+			pathCoords = generateCurvedLine(otherMarker.position,
 											mainMarker.position, 4);
 		}else{
-			var pathCoords = generateCurvedLine(mainMarker.position,
+			 pathCoords = generateCurvedLine(mainMarker.position,
 											otherMarker.position, 4);
 			}
 	}
@@ -1223,7 +1275,7 @@ function getAllStationIds(){
 			allStations.push(property);
 		}
 	}
-	return allStations
+	return allStations;
 }
 /*
     *    Update graph for a station being selected or not
@@ -1293,14 +1345,12 @@ function updateStationSelected(station){
 
         }
         station.infoWindow.open(map, station);
-        setTimeout(function(){redrawActivityBarGraph(station)}, 100);
+        setTimeout(function(){redrawActivityBarGraph(station);}, 100);
         //console.log(genStationStatString(station));
 
         var statString = genStationStatString(station);
         $("#statsDivContent").html(statString);
-  }
-  else
-  {
+  }else{
     resetMarker(station);
   }
   station.setIcon(tempIcon);
@@ -1418,7 +1468,7 @@ function clearStationMarkers() {
 }
 
 function getEmptyWeights(){
-    weights = {}
+    weights = {};
     for(id in stationMarkers){
         weights[id] = 0;
     }
@@ -1480,7 +1530,7 @@ function mapFunctionStations(func) {
  */
 function mapFunctionStationsAsync(func) {
     var newFunc = function(station){
-        setTimeout(function(){func(station)}, 0);
+        setTimeout(function(){func(station);}, 0);
     };
     mapFunctionStations(newFunc);
 }

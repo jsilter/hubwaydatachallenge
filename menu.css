@@ -1,0 +1,475 @@
+html { width: 100%; display: block; }
+body { width: 100%; margin: 0px; padding: 0px;}
+/*-#main { height: 100%; margin: 0 auto}*/
+#all{width:100%; min-height:500px;}
+
+
+
+#bar_chartInstruction{
+    position: absolute;
+    z-index: 1;
+    top: 591px;
+    left: 250px;
+    font-family: serif;
+    font-size: 16px;
+    font-style: italic;
+    line-height: 16px;
+    text-align: center;
+    background-color: #c1ccce;
+    color: #2F2F2F;
+    height: 18px;
+    width: 60%;
+    min-width: 500px;
+}
+
+#bar_chartWrapper{
+    position: absolute;
+    margin:0;
+    padding: 0;
+    left: 250px;
+    top: 590px;
+    z-index: 0;
+    width: 100%;
+}
+#bar_chart {
+    width: 70%;
+}
+
+#controls {width: 100%; display: none;}
+.myTimeControlContainer {float: left;}
+.controlSlider{width: 20%; height: 20px; margin: 0 auto;}
+#myTimeSliderContainer {width: 20%; height: 50px;}
+#myTimeSlider {width: 100%; height: 10px}
+.sliderContainer {float: left;}
+#share-button {float: right;}
+#back_img_1{display: none;}
+
+#header {
+    font-family: 'Londrina Solid', sans-serif;
+    text-transform: uppercase;
+    font-size: 34px;
+    text-align: center;
+    position: relative;
+    top: 60px;
+    width: 100%;
+    color: #5a5f5f;
+}
+
+.statsDivWrapper_Visible {
+    width: 100%;
+    height: 100%;
+    background-color: gray;
+    border-right: 12px solid #AAD2E2;
+    z-index: 2;
+    color: white;
+
+    -webkit-transition: all 0.5s ease;
+    -moz-transition: all 0.5s ease;
+    -o-transition: all 0.5s ease;
+    transition: all 0.5s ease;
+}
+
+.statsDivWrapper_Hidden {
+	width: 0%;
+	height: 0%;
+	overflow: hidden;
+    margin: 0 auto;
+    background-color: black;
+    border-right: 12px solid #AAD2E2;
+    z-index: 2;
+    opacity: 0;
+    -webkit-transition: all 0.5s ease;
+    -moz-transition: all 0.5s ease;
+    -o-transition: all 0.5s ease;
+    transition: all 0.5s ease;
+}
+
+#statsDivWrapper{
+    position: absolute;
+    top: 205px;
+    left: -12px;
+    height: 100%;
+    margin: 0 auto;
+    border-right: 12px solid #AAD2E2;
+    z-index: 2;
+}
+
+#statsDivContent {
+    position: relative;
+    padding-left: 320px;
+    top: 10%;
+    left: 0%;
+    min-width: 300px;
+    font-size: 20px;
+    font-weight: normal;
+}
+
+#returnToMap {
+    position: relative;
+    padding-top: 200px;
+    top: 0px;
+    left: 320px;
+    color: #AAD2E2 ;
+    font-size: 20px;
+    font-family: 'Londrina Solid', sans-serif;
+    text-decoration: none;
+}
+
+
+.statContent_StationName {
+    font-family: "Josefin Slab", serif;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.statContent_Time {
+    font-size: 20px;
+    font-weight: normal;
+
+}
+.statContent_Ranking {
+    font-size: 20px;
+    font-weight: normal;
+}
+
+
+#mainTabsAndMap {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    min-height: 500px;
+
+}
+
+#mainTabs {
+    font-family: 'Londrina Solid', sans-serif;
+    overflow: hidden;
+    display: block;
+    position: relative;
+    min-height:40px;
+    top: 0px;
+    left: 0px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+}
+
+
+#backgroundDiv {
+    position: relative;
+    margin: 0;
+    padding: 0;
+    padding-top: 20px;
+    width: 100%;
+    z-index: 1;
+}
+
+#map_canvas {
+    min-height: 400px;
+}
+
+
+
+.mainTabTitle {
+    padding-bottom: 10px;
+    font-size: 20px;
+}
+
+#mainTabs ul {
+    padding: 0;
+    margin: 84px 0 0 250px;
+    min-width: 800px;
+    overflow: auto;
+    list-style: none;
+    border-top: 3px solid #b2b2b2;
+    border-bottom: 1px solid #e2e2e2;
+}
+
+#mainTabs li {
+    float: left;
+    width: 151px;
+    padding: 4px 0 8px 20px;
+    /*background: url(../images/intro/cover-bars.gif) no-repeat;*/
+}
+
+#mainTabs ul li:nth-child(2) {
+    margin-left: 280px;
+}
+
+#mainTabs p {
+    margin: 0;
+    font-family: serif;
+    font-size: 14px;
+    font-style: italic;
+    line-height: 15px;
+}
+
+#mainTabs a {
+    font-weight: normal;
+    color: #6F6F6F;
+    text-decoration: none;
+}
+
+#mainTabs a:hover {
+    color: #AAD2E2;
+}
+
+
+/***************************************************************
+****************************************************************
+***************************************************************/
+.infoWindow {
+    height: 400px;
+    width: 400px;
+
+}
+
+.infoWindowButton {
+
+
+}
+
+/***************************************************************
+****************************************************************
+***************************************************************/
+
+
+
+#menuDiv
+{
+    z-index: 3;
+    position: absolute;
+    left: 0px;
+    top: 180px;
+    padding: 20px;
+    -webkit-border-radius: 10px;
+    -moz-border-radius: 10px;
+    border-radius: 10px;
+}
+
+#myTimeSlider
+{
+    width: 70%;
+    margin-bottom: 15px;
+}
+
+#myTimeSlider .ui-slider-handle.ui-state-default.ui-corner-all{
+	width: 3px;
+    margin-left:0px;
+}
+
+#ajaxIcon
+{
+    margin-bottom: 5px;
+}
+
+#myTimeSliderContainer
+{
+    width: 100%;
+    text-align: center;
+}
+
+#myTimeLabel
+{
+    font-family: "Josefin Slab", serif;
+    font-size: 30px;
+    padding: 15px;
+}
+
+#playButton
+{
+    font-family: serif;
+    font-size: 12px;
+    padding-bottom: 10px;
+}
+
+.alpha85
+{
+    /*fallback if web browser does not support*/
+    background: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    background: rgba(255, 255, 255, 0.90);
+}
+
+ul.menu{
+    list-style: none;
+    padding: 0;
+    width: 210px;
+    margin: 10px auto;
+}
+
+ul.menu li a{
+    display: block;
+    text-decoration: none;
+
+}
+
+ul.menu li{
+
+    line-height: 20px;
+    /*font-size: 16px;*/
+}
+
+ul.menu li.clickable{
+    padding-bottom: 5px;
+}
+
+ul.menu li.clickable:hover{
+    border-bottom: 1px solid #AAD2E2;
+}
+
+.whiteLine{
+    border-bottom: 1px solid #e2e2e2;
+}
+
+.blackLine{
+    border-bottom: 1px solid #e2e2e2;
+}
+
+ul.menu li.clickable a:hover
+{
+    color: #AAD2E2;
+}
+
+ul.menu li.clickable a{
+    font-family: 'Londrina Solid', sans-serif;
+    font-size: 18px;
+    color: gray;
+
+    /*fallback if web browser does not support*/
+    background: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    background: rgba(255, 255, 255, 0.0);
+}
+
+.visible_content{
+    height: 115px;
+    color: gray;
+
+
+    /*-o-transition: height .5s .2s ease-in-out;
+    -webkit-transition: height .5s .2s ease-in-out;
+    -moz-transition: height .5s .2s ease-in-out;
+    transition: height .5s .2s ease-in-out;*/
+
+    margin: 10px 0px;
+
+    /*fallback if web browser does not support*/
+    background: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    background: rgba(255, 255, 255, 0);
+}
+
+.hidden_content{
+    height: 0;
+    overflow: hidden;
+    color: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    color: rgba(255, 255, 255, 0);
+
+    -o-transition: height .2s .1s ease-in-out;
+    -webkit-transition: height .2s .1s ease-in-out;
+    -moz-transition: height .2s .1s ease-in-out;
+    transition: height .2s .1s ease-in-out;
+
+    margin: 10px 0px;
+
+    /*fallback if web browser does not support*/
+    background: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    background: rgba(255, 255, 255, 0);
+}
+
+#layerControlsDiv
+{
+    padding-top: 20px;
+    padding-left: 20px;
+}
+
+#li5
+{
+    /*padding-left: 30px;
+    padding-top: 15px;*/
+    font-size: 15px;
+}
+
+#stationSizeScale, #stationColorScale
+{
+    height: 90px;
+    width: 12px;
+}
+
+#sizeSliderDiv
+{
+   padding-right: 25px;
+}
+
+#li7
+{
+   padding-left: 0px;
+}
+
+#li3{
+    font-family: 'Josefin Slab', serif;
+    color: #AFAFAF;
+    font-size: 43px;
+    text-align: center;
+}
+
+#week
+{
+    border-bottom: 2px solid #A6DFFC;
+    margin: 0;
+    padding: 0;
+    padding-top: 10px;
+    list-style-type: none;
+    height: 22px;
+    margin-bottom: 10px;
+}
+
+.explanation
+{
+    padding-top: 22px;
+    font-family: serif;
+    color: #3d4042;
+    font-size: 15px;
+    line-height: 25px;
+}
+
+.day
+{
+    padding-top: 4px;
+    color: #3b6077;
+    font-size: 20px;
+
+}
+
+.activated_day, li.unactivated_day:hover
+{
+    /*fallback if web browser does not support*/
+    background: rgb(166,223,252);
+    /* RGBa with 0.6 opacity */
+    background: rgba(166, 223, 252, 1);
+
+    background-color: #a6dffc;
+}
+
+.unactivated_day, li.activated_day:hover
+{
+    /*fallback if web browser does not support*/
+    background: rgb(255,255,255);
+    /* RGBa with 0.6 opacity */
+    background: rgba(255, 255, 255, 0);
+}
+
+.daySelected
+{
+    float: left;
+    display: inline;
+    margin-left: 4px;
+    margin-right: 1px;
+    width: 24px;
+    height: 24px;
+    text-align: center;
+}

@@ -1028,6 +1028,9 @@ function setStationMarkerListeners(stationMarker){
 			$("#bar_chart").hide();
             $("#bar_chartInstruction").show();
             mapFunctionStationsAsync(resetMarker);
+		}else{
+			$("#bar_chart").show();
+            $("#bar_chartInstruction").hide();
 		}
     });
 }
